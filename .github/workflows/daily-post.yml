@@ -27,12 +27,13 @@ jobs:
         env:
           THREADS_ACCESS_TOKEN: ${{ secrets.THREADS_ACCESS_TOKEN }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: node publish.js
 
-      - name: Commit and Push Changes (Update posts.json status)
+      - name: Commit and Push Changes (Update thoughts.txt status)
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add posts.json
-          # Commit only if there are changes to posts.json
-          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update posts.json with publishing status [skip ci]" && git push)
+          git add thoughts.txt
+          # Commit only if there are changes to thoughts.txt
+          git diff --quiet && git diff --staged --quiet || (git commit -m "chore: update thoughts.txt with publishing status [skip ci]" && git push)

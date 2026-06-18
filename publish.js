@@ -7,9 +7,7 @@ function loadEnv() {
   if (fs.existsSync(envPath)) {
     const envContent = fs.readFileSync(envPath, 'utf8');
     envContent.split('\n').forEach(line => {
-      // Ignore comments and empty lines
       if (!line || line.startsWith('#')) return;
-      
       const parts = line.split('=');
       if (parts.length >= 2) {
         const key = parts[0].trim();
@@ -20,53 +18,155 @@ function loadEnv() {
   }
 }
 
-// Helper to delay execution
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Prompt configuration based on the custom "humanizer" skill
+const HUMANIZER_SYSTEM_INSTRUCTION = `
+You are a expert editor and copywriter. Your task is to rewrite the input raw text to make it sound completely human-written, natural, and engaging for Russian-speaking Threads users.
+Follow these rules strictly:
+
+1. PERSONALITY AND VOICE:
+- Write in the first-person perspective ("я", "мне кажется", "заметил", "думаю", "честно говоря").
+- Make it sound like a real person sharing a casual note. It should be informal, relaxed, and authentic.
+- Vary the sentence length. Use short punchy sentences mixed with longer ones.
+- Acknowledge uncertainty or personal feelings (e.g., "я пока не знаю, взлетит ли это, но...", "звучит просто, но на деле...").
+
+2. STRICT ANTI-AI PATTERNS (AVOID THESE IN RUSSIAN):
+- Never use AI vocabulary and clichés: "важно отметить", "в современном мире", "стремительно развивающийся", "ландшафт", "экосистема", "уникальный", "ключевой", "является свидетельством", "стоит подчеркнуть", "настоящий прорыв", "углубиться", "гармония", "ценность".
+- Avoid copula avoidance: use simple "это", "есть" instead of "служит в качестве", "выступает в роли", "представляет собой".
+- Avoid negative parallelisms like "это не просто X, это Y" ("это не просто скрипт, это полноценный помощник" - remove this).
+- Do NOT use emojis at the start of every sentence/bullet, nor bold headers or colons. Emojis must be used naturally and sparingly (maximum 1-2 per post).
+- Avoid generic positive summaries or marketing slogans at the end ("впереди нас ждут великие дела", "давайте двигаться к успеху вместе").
+
+3. FORMAT:
+- The output must be pure text ready to copy-paste. No introductions like "Вот ваш текст:".
+- Keep the post concise and make sure it fits within the 500-character limit.
+`;
+
+const FALLBACK_PROMPT = `
+Generate a short, useful marketing, SMM, or productivity tip/insight in Russian for Threads.
+It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, and fit under 400 characters.
+`;
+
+async function callGemini(apiKey, systemInstruction, promptText) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  
+  const body = {
+    contents: [
+      {
+        parts: [
+          {
+            text: `${systemInstruction}\n\nInput text to rewrite/humanize:\n"${promptText}"`
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.7,
+      maxOutputTokens: 300
+    }
+  };
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(`Gemini API error: ${JSON.stringify(data.error || data)}`);
+  }
+
+  return data.candidates[0].content.parts[0].text.trim();
+}
 
 async function publishNextPost() {
   loadEnv();
 
   const accessToken = process.env.THREADS_ACCESS_TOKEN;
   const userId = process.env.THREADS_USER_ID;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
 
   if (!accessToken || !userId) {
-    console.error('ERROR: THREADS_ACCESS_TOKEN and THREADS_USER_ID must be set in env variables or .env file.');
+    console.error('ERROR: THREADS_ACCESS_TOKEN and THREADS_USER_ID must be set.');
     process.exit(1);
   }
 
-  const postsPath = path.join(__dirname, 'posts.json');
-  if (!fs.existsSync(postsPath)) {
-    console.error(`ERROR: posts.json database not found at ${postsPath}`);
-    process.exit(1);
+  let rawDraft = '';
+  let remainingThoughts = [];
+  const thoughtsPath = path.join(__dirname, 'thoughts.txt');
+
+  // 1. Read thoughts.txt if it exists
+  if (fs.existsSync(thoughtsPath)) {
+    try {
+      const content = fs.readFileSync(thoughtsPath, 'utf8').trim();
+      if (content) {
+        // Split by "---" delimiter
+        const thoughts = content.split(/\n---\n|\r\n---\r\n|---/);
+        const activeThoughts = thoughts.map(t => t.trim()).filter(Boolean);
+        
+        if (activeThoughts.length > 0) {
+          rawDraft = activeThoughts[0];
+          remainingThoughts = activeThoughts.slice(1);
+        }
+      }
+    } catch (err) {
+      console.warn('Warning: Could not read thoughts.txt, falling back to AI generation:', err.message);
+    }
   }
 
-  // Read the posts database
-  let posts = [];
-  try {
-    const fileData = fs.readFileSync(postsPath, 'utf8');
-    posts = JSON.parse(fileData);
-  } catch (error) {
-    console.error('ERROR: Failed to read or parse posts.json:', error.message);
-    process.exit(1);
+  let finalPostText = '';
+
+  // 2. Process with Gemini API
+  if (geminiApiKey) {
+    try {
+      if (rawDraft) {
+        console.log(`\nFound raw draft in thoughts.txt: "${rawDraft.substring(0, 60)}..."`);
+        console.log('Humanizing draft using Gemini API...');
+        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, rawDraft);
+      } else {
+        console.log('\nthoughts.txt is empty or missing. Falling back to AI post generation...');
+        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, FALLBACK_PROMPT);
+      }
+    } catch (err) {
+      console.error('ERROR calling Gemini API:', err.message);
+      // If we have a raw draft, we can fall back to using it directly without humanization
+      if (rawDraft) {
+        console.log('Falling back to raw draft text directly...');
+        finalPostText = rawDraft;
+      } else {
+        process.exit(1);
+      }
+    }
+  } else {
+    // No Gemini key
+    if (rawDraft) {
+      console.log('\nWarning: GEMINI_API_KEY is not set. Publishing raw draft without humanization.');
+      finalPostText = rawDraft;
+    } else {
+      console.error('ERROR: GEMINI_API_KEY is not set and thoughts.txt is empty. Nothing to publish.');
+      process.exit(1);
+    }
   }
 
-  // Find the first unpublished post
-  const nextPost = posts.find(post => post.published === false);
-
-  if (!nextPost) {
-    console.log('NOTICE: No unpublished posts found. Queue is empty.');
-    return;
+  // Double check post length
+  if (finalPostText.length > 500) {
+    console.log('Post too long, truncating to 500 characters...');
+    finalPostText = finalPostText.substring(0, 497) + '...';
   }
 
-  console.log(`\nAttempting to publish post ID ${nextPost.id}...`);
-  console.log(`Content: "${nextPost.text}"`);
+  console.log(`\nFinal post text to publish:\n"${finalPostText}"`);
 
+  // 3. Publish to Threads
   try {
     // Step 1: Create media container
-    console.log('Step 1: Creating media container...');
+    console.log('\nStep 1: Creating Threads media container...');
     const containerParams = new URLSearchParams({
       media_type: 'TEXT',
-      text: nextPost.text,
+      text: finalPostText,
       access_token: accessToken
     });
 
@@ -79,15 +179,14 @@ async function publishNextPost() {
     });
 
     const containerData = await containerRes.json();
-
     if (!containerRes.ok || containerData.error) {
       throw new Error(`Failed to create media container: ${JSON.stringify(containerData.error || containerData)}`);
     }
 
     const creationId = containerData.id;
-    console.log(`Media container created successfully. Creation ID: ${creationId}`);
+    console.log(`Container created. ID: ${creationId}`);
 
-    // Wait for the container to process (Meta recommended)
+    // Wait for the container to process
     console.log('Waiting 5 seconds for processing...');
     await sleep(5000);
 
@@ -107,21 +206,22 @@ async function publishNextPost() {
     });
 
     const publishData = await publishRes.json();
-
     if (!publishRes.ok || publishData.error) {
       throw new Error(`Failed to publish container: ${JSON.stringify(publishData.error || publishData)}`);
     }
 
-    const postId = publishData.id;
-    console.log(`SUCCESS! Thread published successfully. Post ID: ${postId}`);
+    console.log(`SUCCESS! Thread published successfully. Post ID: ${publishData.id}`);
 
-    // Step 3: Update posts.json status
-    nextPost.published = true;
-    nextPost.publishedAt = new Date().toISOString();
-    nextPost.postId = postId;
-
-    fs.writeFileSync(postsPath, JSON.stringify(posts, null, 2), 'utf8');
-    console.log('Updated posts.json successfully.');
+    // 4. Update thoughts.txt (remove the processed draft)
+    if (rawDraft) {
+      try {
+        const newContent = remainingThoughts.join('\n---\n');
+        fs.writeFileSync(thoughtsPath, newContent, 'utf8');
+        console.log('Removed published draft from thoughts.txt.');
+      } catch (err) {
+        console.error('Warning: Failed to update thoughts.txt:', err.message);
+      }
+    }
 
   } catch (error) {
     console.error('\nERROR during publication:', error.message);
