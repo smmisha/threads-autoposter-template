@@ -16,7 +16,8 @@
   {
     "id": 3,
     "text": "Fun fact: The official Threads API was launched by Meta in 2024 to support creator workflows. 💻",
-    "published": false,
-    "publishedAt": null
+    "published": true,
+    "publishedAt": "2026-06-18T22:56:30.199Z",
+    "postId": "18000853559953898"
   }
 ]
