@@ -1,0 +1,21 @@
+[
+  {
+    "id": 1,
+    "text": "Hello Threads! This is my first automated post using the official API and Node.js. 🚀",
+    "published": true,
+    "publishedAt": "2026-06-18T22:08:12.817Z",
+    "postId": "18084019172208552"
+  },
+  {
+    "id": 2,
+    "text": "Automating your social media posts helps you keep a consistent schedule and reach more people. 📈",
+    "published": false,
+    "publishedAt": null
+  },
+  {
+    "id": 3,
+    "text": "Fun fact: The official Threads API was launched by Meta in 2024 to support creator workflows. 💻",
+    "published": false,
+    "publishedAt": null
+  }
+]
