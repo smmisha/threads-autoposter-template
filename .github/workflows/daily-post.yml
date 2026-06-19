@@ -1,9 +1,8 @@
 name: Daily Threads Auto-Publisher
 
 on:
-  schedule:
-    # Runs every day at 09:00 UTC (12:00 Moscow Time)
-    - cron: '0 9 * * *'
+  repository_dispatch:
+    types: [daily_post]
   workflow_dispatch:
     # Allows manual triggering from the GitHub Actions tab
 
