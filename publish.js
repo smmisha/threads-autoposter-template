@@ -41,10 +41,12 @@ Follow these rules strictly:
 3. FORMAT:
 - The output must be pure text ready to copy-paste. No introductions like "Вот ваш текст:".
 - Keep the post concise and make sure it fits within the 500-character limit.
+- Do NOT place a period/dot (.) at the very end of the post. End with a word, question mark (?), exclamation mark (!), emoji, or ellipsis (...), but never a single period.
 `;
 
 const FALLBACK_PROMPT = `
-Generate a short, useful marketing, SMM, or productivity tip/insight in Russian for Threads.
+Generate a short, useful digital/blogging tip, remote work insight, SMM advice, or a lighthearted observation about tech life/freelance in Russian for Threads.
+Rotate between different topics (e.g., productivity, copywriting, personal branding, marketing, work-life balance, IT/office humor). Do NOT write only about automation.
 It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, and fit under 400 characters.
 `;
 
@@ -150,6 +152,13 @@ async function publishNextPost() {
       console.error('ERROR: GEMINI_API_KEY is not set and thoughts.txt is empty. Nothing to publish.');
       process.exit(1);
     }
+  }
+
+  // Remove trailing period if present (unless it is part of an ellipsis)
+  finalPostText = finalPostText.trim();
+  if (finalPostText.endsWith('.') && !finalPostText.endsWith('...')) {
+    console.log('Stripping trailing period from the end of the post.');
+    finalPostText = finalPostText.slice(0, -1).trim();
   }
 
   // Double check post length
