@@ -1,0 +1,2 @@
+- **No Guessing / Research First**: When an error or unexpected behavior occurs, never guess the cause or propose solutions based on assumptions. Always search the web first (official documentation, GitHub issues, StackOverflow, etc.) to identify the exact documented cause and solution.
+- **Action-First Resolution**: Prioritize implementing and verifying the technical fix first. Do not lead with apologies or lengthy explanations. Fix the issue, verify it, and only then briefly explain the change.
