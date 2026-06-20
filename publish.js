@@ -45,9 +45,9 @@ Follow these rules strictly:
 `;
 
 const FALLBACK_PROMPT = `
-Generate a short, useful digital/blogging tip, remote work insight, SMM advice, or a lighthearted observation about tech life/freelance in Russian for Threads.
-Rotate between different topics (e.g., productivity, copywriting, personal branding, marketing, work-life balance, IT/office humor). Do NOT write only about automation.
-It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, and fit under 400 characters.
+Generate a short, engaging insight, observation, or trend summary about recent developments in IT, SMM, or AI in Russian for Threads.
+Focus on topics like: artificial intelligence integration, how social networks are changing, smart SMM tricks, tech industry observations, or new digital tools.
+It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, no trailing period, and fit under 400 characters.
 `;
 
 async function callGemini(apiKey, systemInstruction, promptText) {
