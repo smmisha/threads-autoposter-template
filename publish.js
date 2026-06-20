@@ -44,10 +44,26 @@ Follow these rules strictly:
 - Do NOT place a period/dot (.) at the very end of the post. End with a word, question mark (?), exclamation mark (!), emoji, or ellipsis (...), but never a single period.
 `;
 
-const FALLBACK_PROMPT = `
-Find and summarize one specific, very recent news event, update, or trend from the last few days in IT, SMM, or AI (e.g. new AI features, tech platform launches, digital tools, industry updates).
-Choose a single hot news topic, describe it briefly and informally, and share a quick thought/reaction.
-It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, no trailing period, and fit under 450 characters.
+const NEWS_GENERATOR_SYSTEM_INSTRUCTION = `
+You are a creative copywriter and tech blogger. Your task is to write a short, engaging, and completely natural post in Russian for Threads based on the provided news item.
+Follow these rules strictly:
+
+1. PERSONALITY AND VOICE:
+- Write in the first-person perspective ("я", "мне кажется", "заметил", "думаю", "честно говоря").
+- Tone should be informal, relaxed, and authentic, like a real person sharing a note.
+- Vary the sentence length. Use short punchy sentences mixed with longer ones.
+
+2. STRICT ANTI-AI PATTERNS (AVOID THESE IN RUSSIAN):
+- Never use AI vocabulary and clichés: "важно отметить", "в современном мире", "стремительно развивающийся", "ландшафт", "уникальный", "ключевой", "стоит подчеркнуть", "настоящий прорыв", "углубиться", "гармония", "ценность".
+- Avoid copula avoidance: use simple "это", "есть" instead of "служит в качестве", "выступает в роли", "представляет собой".
+- Avoid negative parallelisms like "это не просто X, это Y".
+- Do NOT use emojis at the start of every sentence/bullet. Emojis must be used naturally and sparingly (maximum 1-2 per post).
+- Do NOT use markdown bold headers, lists, bullet points, or asterisks. Write in plain text without markdown symbols.
+
+3. FORMAT:
+- Output only the final post text. No introductory remarks (do NOT write "Вот ваш пост:", "Перевод:", "Новость:").
+- Keep it under 400 characters.
+- Do NOT place a period/dot (.) at the very end of the post. End with a word, question mark, exclamation mark, emoji, or ellipsis, but never a single period.
 `;
 
 async function callGemini(apiKey, systemInstruction, promptText, enableSearch = false) {
@@ -58,7 +74,7 @@ async function callGemini(apiKey, systemInstruction, promptText, enableSearch = 
       {
         parts: [
           {
-            text: `${systemInstruction}\n\nInput text to rewrite/humanize:\n"${promptText}"`
+            text: `${systemInstruction}\n\n${promptText}`
           }
         ]
       }
@@ -181,39 +197,35 @@ async function publishNextPost() {
   // 2. Process with Gemini API
   if (geminiApiKey) {
     try {
-      if (rawDraft) {
-        console.log(`\nFound raw draft in thoughts.txt: "${rawDraft.substring(0, 60)}..."`);
-        console.log('Humanizing draft using Gemini API...');
-        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, rawDraft);
-      } else {
-        console.log('\nthoughts.txt is empty or missing. Fetching fresh news from TechCrunch...');
-        const newsItems = await fetchLatestTechNews();
-        
-        let prompt = '';
-        if (newsItems.length > 0) {
-          // Select the first item
-          const latestNews = newsItems[0];
-          console.log(`Successfully fetched news: "${latestNews.title}"`);
-          prompt = `
-Here is a very recent tech/AI news item:
-Title: "${latestNews.title}"
-Description: "${latestNews.description}"
-
-Write a short, engaging, and informal post in Russian about this news for my Threads blog.
-Tell the reader about this news event, and share a quick thought/reaction (e.g., why it matters or what it means).
-It must follow all the anti-AI humanizer rules: first-person voice ("я", "мне кажется"), no AI clichés, conversational tone, no trailing period, and fit under 450 characters.
-`;
+        if (rawDraft) {
+          console.log(`\nFound raw draft in thoughts.txt: "${rawDraft.substring(0, 60)}..."`);
+          console.log('Humanizing draft using Gemini API...');
+          finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, "Пожалуйста, перепиши и хуманизируй следующий текст:\n\n" + rawDraft);
         } else {
-          console.log('No news articles fetched. Generating a general IT/SMM trend observation...');
-          prompt = `
-Generate a short, engaging insight, observation, or trend summary about developments in IT, SMM, or AI in Russian for Threads.
-Focus on topics like: artificial intelligence integration, how social networks are changing, smart SMM tricks, tech industry observations, or new digital tools.
-It must follow all the anti-AI humanizer rules: first-person voice ("я", "мне кажется"), no AI clichés, conversational tone, no trailing period, and fit under 400 characters.
+          console.log('\nthoughts.txt is empty or missing. Fetching fresh news from TechCrunch...');
+          const newsItems = await fetchLatestTechNews();
+          
+          let prompt = '';
+          if (newsItems.length > 0) {
+            // Select the first item
+            const latestNews = newsItems[0];
+            console.log(`Successfully fetched news: "${latestNews.title}"`);
+            prompt = `
+Вот свежая новость из сферы технологий:
+Название: "${latestNews.title}"
+Описание: "${latestNews.description}"
+
+Напиши короткий неформальный пост на русском языке на основе этой новости для моего блога в Threads. Поделись этой новостью и добавь короткую мысль или реакцию от себя (например, почему это важно).
 `;
+          } else {
+            console.log('No news articles fetched. Generating a general IT/SMM trend observation...');
+            prompt = `
+Сгенерируй короткую интересную мысль, наблюдение или тренд из сферы IT, SMM или искусственного интеллекта.
+`;
+          }
+          
+          finalPostText = await callGemini(geminiApiKey, NEWS_GENERATOR_SYSTEM_INSTRUCTION, prompt, false);
         }
-        
-        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, prompt, false);
-      }
     } catch (err) {
       console.error('ERROR calling Gemini API:', err.message);
       // If we have a raw draft, we can fall back to using it directly without humanization
