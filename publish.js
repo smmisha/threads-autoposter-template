@@ -110,6 +110,7 @@ async function callGemini(apiKey, systemInstruction, promptText, model = 'gemini
       });
 
       const data = await res.json();
+      console.log('Gemini API raw response:', JSON.stringify(data, null, 2));
       if (!res.ok || data.error) {
         const status = data.error?.status || res.status;
         const isTransient = status === 503 || status === 'UNAVAILABLE' || res.status === 503;
