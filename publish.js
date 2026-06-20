@@ -109,7 +109,7 @@ async function callGemini(apiKey, systemInstruction, promptText, enableSearch = 
     throw new Error(`Gemini API error: ${JSON.stringify(data.error || data)}`);
   }
 
-  return data.candidates[0].content.parts[0].text.trim();
+  return data.candidates[0].content.parts.map(p => p.text).join('').trim();
 }
 
 async function fetchLatestTechNews() {
