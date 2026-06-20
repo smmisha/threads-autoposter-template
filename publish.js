@@ -89,6 +89,58 @@ async function callGemini(apiKey, systemInstruction, promptText, enableSearch = 
   return data.candidates[0].content.parts[0].text.trim();
 }
 
+async function fetchLatestTechNews() {
+  try {
+    console.log('Fetching latest news from TechCrunch RSS feed...');
+    const res = await fetch('https://techcrunch.com/feed/', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+    const xml = await res.text();
+    
+    const items = [];
+    const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
+    for (const match of itemMatches) {
+      const itemContent = match[1];
+      
+      // Parse Title
+      let title = '';
+      const titleCdataMatch = itemContent.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i);
+      if (titleCdataMatch) {
+        title = titleCdataMatch[1];
+      } else {
+        const titleNormalMatch = itemContent.match(/<title>([\s\S]*?)<\/title>/i);
+        if (titleNormalMatch) title = titleNormalMatch[1];
+      }
+      
+      // Parse Description
+      let description = '';
+      const descCdataMatch = itemContent.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i);
+      if (descCdataMatch) {
+        description = descCdataMatch[1];
+      } else {
+        const descNormalMatch = itemContent.match(/<description>([\s\S]*?)<\/description>/i);
+        if (descNormalMatch) description = descNormalMatch[1];
+      }
+      
+      description = description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 150);
+      
+      if (title) {
+        items.push({ title: title.trim(), description: description.trim() });
+      }
+    }
+    
+    return items;
+  } catch (err) {
+    console.warn('Failed to fetch TechCrunch RSS, falling back to offline generation:', err.message);
+    return [];
+  }
+}
+
 async function publishNextPost() {
   loadEnv();
 
@@ -134,8 +186,33 @@ async function publishNextPost() {
         console.log('Humanizing draft using Gemini API...');
         finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, rawDraft);
       } else {
-        console.log('\nthoughts.txt is empty or missing. Falling back to AI post generation with Google Search...');
-        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, FALLBACK_PROMPT, true);
+        console.log('\nthoughts.txt is empty or missing. Fetching fresh news from TechCrunch...');
+        const newsItems = await fetchLatestTechNews();
+        
+        let prompt = '';
+        if (newsItems.length > 0) {
+          // Select the first item
+          const latestNews = newsItems[0];
+          console.log(`Successfully fetched news: "${latestNews.title}"`);
+          prompt = `
+Here is a very recent tech/AI news item:
+Title: "${latestNews.title}"
+Description: "${latestNews.description}"
+
+Write a short, engaging, and informal post in Russian about this news for my Threads blog.
+Tell the reader about this news event, and share a quick thought/reaction (e.g., why it matters or what it means).
+It must follow all the anti-AI humanizer rules: first-person voice ("я", "мне кажется"), no AI clichés, conversational tone, no trailing period, and fit under 450 characters.
+`;
+        } else {
+          console.log('No news articles fetched. Generating a general IT/SMM trend observation...');
+          prompt = `
+Generate a short, engaging insight, observation, or trend summary about developments in IT, SMM, or AI in Russian for Threads.
+Focus on topics like: artificial intelligence integration, how social networks are changing, smart SMM tricks, tech industry observations, or new digital tools.
+It must follow all the anti-AI humanizer rules: first-person voice ("я", "мне кажется"), no AI clichés, conversational tone, no trailing period, and fit under 400 characters.
+`;
+        }
+        
+        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, prompt, false);
       }
     } catch (err) {
       console.error('ERROR calling Gemini API:', err.message);
