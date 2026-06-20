@@ -66,8 +66,8 @@ Follow these rules strictly:
 - Do NOT place a period/dot (.) at the very end of the post. End with a word, question mark, exclamation mark, emoji, or ellipsis, but never a single period.
 `;
 
-async function callGemini(apiKey, systemInstruction, promptText, enableSearch = false) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
+async function callGemini(apiKey, systemInstruction, promptText, model = 'gemini-3.5-flash', enableSearch = false) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
   
   const body = {
     system_instruction: {
@@ -229,7 +229,12 @@ async function publishNextPost() {
         if (rawDraft) {
           console.log(`\nFound raw draft in thoughts.txt: "${rawDraft.substring(0, 60)}..."`);
           console.log('Humanizing draft using Gemini API...');
-          finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, "Пожалуйста, перепиши и хуманизируй следующий текст:\n\n" + rawDraft);
+          try {
+            finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, "Пожалуйста, перепиши и хуманизируй следующий текст:\n\n" + rawDraft, 'gemini-3.5-flash');
+          } catch (err) {
+            console.warn('Gemini 3.5 Flash failed. Trying Gemini 2.5 Flash:', err.message);
+            finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, "Пожалуйста, перепиши и хуманизируй следующий текст:\n\n" + rawDraft, 'gemini-2.5-flash');
+          }
         } else {
           console.log('\nthoughts.txt is empty or missing. Fetching fresh news from TechCrunch...');
           const newsItems = await fetchLatestTechNews();
@@ -253,10 +258,15 @@ async function publishNextPost() {
 `;
           }
           
-          finalPostText = await callGemini(geminiApiKey, NEWS_GENERATOR_SYSTEM_INSTRUCTION, prompt, false);
+          try {
+            finalPostText = await callGemini(geminiApiKey, NEWS_GENERATOR_SYSTEM_INSTRUCTION, prompt, 'gemini-3.5-flash', false);
+          } catch (err) {
+            console.warn('Gemini 3.5 Flash failed. Trying Gemini 2.5 Flash:', err.message);
+            finalPostText = await callGemini(geminiApiKey, NEWS_GENERATOR_SYSTEM_INSTRUCTION, prompt, 'gemini-2.5-flash', false);
+          }
         }
     } catch (err) {
-      console.error('ERROR calling Gemini API:', err.message);
+      console.error('All Gemini API models failed:', err.message);
       // If we have a raw draft, we can fall back to using it directly without humanization
       if (rawDraft) {
         console.log('Falling back to raw draft text directly...');
