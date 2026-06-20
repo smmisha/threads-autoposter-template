@@ -70,11 +70,18 @@ async function callGemini(apiKey, systemInstruction, promptText, enableSearch = 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
   
   const body = {
+    system_instruction: {
+      parts: [
+        {
+          text: systemInstruction
+        }
+      ]
+    },
     contents: [
       {
         parts: [
           {
-            text: `${systemInstruction}\n\n${promptText}`
+            text: promptText
           }
         ]
       }
