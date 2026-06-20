@@ -96,20 +96,42 @@ async function callGemini(apiKey, systemInstruction, promptText, enableSearch = 
     body.tools = [{ google_search: {} }];
   }
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
+  const maxRetries = 3;
+  let delay = 2000;
 
-  const data = await res.json();
-  if (!res.ok || data.error) {
-    throw new Error(`Gemini API error: ${JSON.stringify(data.error || data)}`);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        const status = data.error?.status || res.status;
+        const isTransient = status === 503 || status === 'UNAVAILABLE' || res.status === 503;
+        if (isTransient && attempt < maxRetries) {
+          console.warn(`Gemini API 503 (Unavailable) on attempt ${attempt}. Retrying in ${delay}ms...`);
+          await sleep(delay);
+          delay *= 2;
+          continue;
+        }
+        throw new Error(`Gemini API error: ${JSON.stringify(data.error || data)}`);
+      }
+
+      return data.candidates[0].content.parts.map(p => p.text).join('').trim();
+    } catch (err) {
+      if (attempt === maxRetries) {
+        throw err;
+      }
+      console.warn(`Gemini API call failed on attempt ${attempt}: ${err.message}. Retrying in ${delay}ms...`);
+      await sleep(delay);
+      delay *= 2;
+    }
   }
-
-  return data.candidates[0].content.parts.map(p => p.text).join('').trim();
 }
 
 async function fetchLatestTechNews() {
