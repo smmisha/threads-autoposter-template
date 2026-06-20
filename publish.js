@@ -51,7 +51,7 @@ It must follow all the anti-AI humanizer rules: first-person voice, no AI clich√
 `;
 
 async function callGemini(apiKey, systemInstruction, promptText) {
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
   
   const body = {
     contents: [
