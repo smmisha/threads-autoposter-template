@@ -302,72 +302,84 @@ async function publishNextPost() {
 
   console.log(`\nFinal post text to publish:\n"${finalPostText}"`);
 
-  // 3. Publish to Threads
-  try {
-    // Step 1: Create media container
-    console.log('\nStep 1: Creating Threads media container...');
-    const containerParams = new URLSearchParams({
-      media_type: 'TEXT',
-      text: finalPostText,
-      access_token: accessToken
-    });
+  // 3. Publish to Threads (with retry logic)
+  const maxThreadsRetries = 3;
+  let publishedSuccessfully = false;
 
-    const containerRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: containerParams.toString()
-    });
+  for (let attempt = 1; attempt <= maxThreadsRetries; attempt++) {
+    try {
+      // Step 1: Create media container
+      console.log(`\nStep 1: Creating Threads media container (attempt ${attempt}/${maxThreadsRetries})...`);
+      const containerParams = new URLSearchParams({
+        media_type: 'TEXT',
+        text: finalPostText,
+        access_token: accessToken
+      });
 
-    const containerData = await containerRes.json();
-    if (!containerRes.ok || containerData.error) {
-      throw new Error(`Failed to create media container: ${JSON.stringify(containerData.error || containerData)}`);
-    }
+      const containerRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: containerParams.toString()
+      });
 
-    const creationId = containerData.id;
-    console.log(`Container created. ID: ${creationId}`);
+      const containerData = await containerRes.json();
+      if (!containerRes.ok || containerData.error) {
+        throw new Error(`Failed to create media container: ${JSON.stringify(containerData.error || containerData)}`);
+      }
 
-    // Wait for the container to process
-    console.log('Waiting 5 seconds for processing...');
-    await sleep(5000);
+      const creationId = containerData.id;
+      console.log(`Container created. ID: ${creationId}`);
 
-    // Step 2: Publish media container
-    console.log('Step 2: Publishing container...');
-    const publishParams = new URLSearchParams({
-      creation_id: creationId,
-      access_token: accessToken
-    });
+      // Wait for the container to process
+      console.log('Waiting 5 seconds for processing...');
+      await sleep(5000);
 
-    const publishRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads_publish`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: publishParams.toString()
-    });
+      // Step 2: Publish media container
+      console.log('Step 2: Publishing container...');
+      const publishParams = new URLSearchParams({
+        creation_id: creationId,
+        access_token: accessToken
+      });
 
-    const publishData = await publishRes.json();
-    if (!publishRes.ok || publishData.error) {
-      throw new Error(`Failed to publish container: ${JSON.stringify(publishData.error || publishData)}`);
-    }
+      const publishRes = await fetch(`https://graph.threads.net/v1.0/${userId}/threads_publish`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: publishParams.toString()
+      });
 
-    console.log(`SUCCESS! Thread published successfully. Post ID: ${publishData.id}`);
+      const publishData = await publishRes.json();
+      if (!publishRes.ok || publishData.error) {
+        throw new Error(`Failed to publish container: ${JSON.stringify(publishData.error || publishData)}`);
+      }
 
-    // 4. Update thoughts.txt (remove the processed draft)
-    if (rawDraft) {
-      try {
-        const newContent = remainingThoughts.join('\n---\n');
-        fs.writeFileSync(thoughtsPath, newContent, 'utf8');
-        console.log('Removed published draft from thoughts.txt.');
-      } catch (err) {
-        console.error('Warning: Failed to update thoughts.txt:', err.message);
+      console.log(`SUCCESS! Thread published successfully. Post ID: ${publishData.id}`);
+      publishedSuccessfully = true;
+      break; // Exit loop on success
+    } catch (error) {
+      console.error(`Threads publication attempt ${attempt} failed:`, error.message);
+      if (attempt < maxThreadsRetries) {
+        console.log('Waiting 5 seconds before retrying publication...');
+        await sleep(5000);
+      } else {
+        console.error('All Threads publication attempts failed.');
+        process.exit(1);
       }
     }
+  }
 
-  } catch (error) {
-    console.error('\nERROR during publication:', error.message);
-    process.exit(1);
+  // 4. Update thoughts.txt (remove the processed draft) if successfully published
+  if (publishedSuccessfully && rawDraft) {
+    try {
+      const newContent = remainingThoughts.join('\n---\n');
+      fs.writeFileSync(thoughtsPath, newContent, 'utf8');
+      console.log('Removed published draft from thoughts.txt.');
+    } catch (err) {
+      console.error('Warning: Failed to update thoughts.txt:', err.message);
+    }
   }
 }
 
