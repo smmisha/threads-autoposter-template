@@ -45,12 +45,12 @@ Follow these rules strictly:
 `;
 
 const FALLBACK_PROMPT = `
-Generate a short, engaging insight, observation, or trend summary about recent developments in IT, SMM, or AI in Russian for Threads.
-Focus on topics like: artificial intelligence integration, how social networks are changing, smart SMM tricks, tech industry observations, or new digital tools.
-It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, no trailing period, and fit under 400 characters.
+Find and summarize one specific, very recent news event, update, or trend from the last few days in IT, SMM, or AI (e.g. new AI features, tech platform launches, digital tools, industry updates).
+Choose a single hot news topic, describe it briefly and informally, and share a quick thought/reaction.
+It must follow all the anti-AI humanizer rules: first-person voice, no AI clichés, conversational tone, no trailing period, and fit under 450 characters.
 `;
 
-async function callGemini(apiKey, systemInstruction, promptText) {
+async function callGemini(apiKey, systemInstruction, promptText, enableSearch = false) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`;
   
   const body = {
@@ -68,6 +68,10 @@ async function callGemini(apiKey, systemInstruction, promptText) {
       maxOutputTokens: 300
     }
   };
+
+  if (enableSearch) {
+    body.tools = [{ google_search: {} }];
+  }
 
   const res = await fetch(url, {
     method: 'POST',
@@ -130,8 +134,8 @@ async function publishNextPost() {
         console.log('Humanizing draft using Gemini API...');
         finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, rawDraft);
       } else {
-        console.log('\nthoughts.txt is empty or missing. Falling back to AI post generation...');
-        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, FALLBACK_PROMPT);
+        console.log('\nthoughts.txt is empty or missing. Falling back to AI post generation with Google Search...');
+        finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, FALLBACK_PROMPT, true);
       }
     } catch (err) {
       console.error('ERROR calling Gemini API:', err.message);
