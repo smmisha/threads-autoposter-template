@@ -60,7 +60,11 @@ Follow these rules strictly:
 - Do NOT use emojis at the start of every sentence/bullet. Emojis must be used naturally and sparingly (maximum 1-2 per post).
 - Do NOT use markdown bold headers, lists, bullet points, or asterisks. Write in plain text without markdown symbols.
 
-3. FORMAT:
+3. FORBIDDEN TOPICS (POLITICS, RELIGION, MILITARY/WAR):
+- Do NOT write posts glorifying, celebrating, or neutrally describing military technology, defense tech, weapons, startups for defense/military, war, politics, or religion.
+- If you must write about a news event related to defense or military tech, write about it ONLY in a highly critical, negative, or anti-war tone. Otherwise, completely skip/avoid these topics.
+
+4. FORMAT:
 - Output only the final post text. No introductory remarks (do NOT write "Вот ваш пост:", "Перевод:", "Новость:").
 - Keep it under 400 characters.
 - Do NOT place a period/dot (.) at the very end of the post. End with a word, question mark, exclamation mark, emoji, or ellipsis, but never a single period.
@@ -175,8 +179,19 @@ async function fetchLatestTechNews() {
       
       description = description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 150);
       
-      if (title) {
+      // Check for forbidden keywords (defense, military, weapon, war, politics, religion, etc.)
+      const forbiddenKeywords = [
+        'military', 'defense', 'weapon', 'war', 'politics', 'religion', 'pentagon', 'army', 'navy', 'air force',
+        'combat', 'battle', 'startup for defense', 'darpa', 'defense tech', 'defense-tech', 'national security'
+      ];
+      
+      const textToScan = `${title} ${description}`.toLowerCase();
+      const hasForbiddenKeyword = forbiddenKeywords.some(keyword => textToScan.includes(keyword));
+      
+      if (title && !hasForbiddenKeyword) {
         items.push({ title: title.trim(), description: description.trim() });
+      } else if (hasForbiddenKeyword) {
+        console.log(`Skipping defense/military/political article: "${title}"`);
       }
     }
     
