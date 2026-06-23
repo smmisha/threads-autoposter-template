@@ -1,5 +1,14 @@
+/**
+ * Threads Autoposter
+ * Developer/Author: socialmediamisha (https://github.com/socialmediamisha)
+ * Description: Automated AI-driven posting script for Meta Threads using RSS feeds and Google Gemini API.
+ * License: MIT
+ * Copyright (c) 2026 socialmediamisha
+ */
+
 const fs = require('fs');
 const path = require('path');
+
 
 // Helper to load environment variables from local .env file
 function loadEnv() {

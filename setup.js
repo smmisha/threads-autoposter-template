@@ -1,5 +1,14 @@
+/**
+ * Threads API Authorization Helper
+ * Developer/Author: socialmediamisha (https://github.com/socialmediamisha)
+ * Description: Interactive console helper to generate a long-lived 60-day Meta Threads API access token.
+ * License: MIT
+ * Copyright (c) 2026 socialmediamisha
+ */
+
 const fs = require('fs');
 const readline = require('readline/promises');
+
 const { stdin: input, stdout: output } = require('process');
 
 const DEFAULT_APP_ID = '2258368148304501';
