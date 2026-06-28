@@ -150,8 +150,12 @@ async function callGemini(apiKey, systemInstruction, promptText, model = 'gemini
 
 async function fetchLatestTechNews() {
   try {
-    console.log('Fetching latest news from TechCrunch RSS feed...');
-    const res = await fetch('https://techcrunch.com/feed/', {
+    // === НАСТРОЙКА ИСТОЧНИКА НОВОСТЕЙ ===
+    // Вы можете заменить ссылку ниже на любую другую RSS-ленту (например, https://habr.com/ru/rss/all/all/ или ленту новостей вашей тематики)
+    const RSS_FEED_URL = 'https://techcrunch.com/feed/';
+    
+    console.log(`Fetching latest news from RSS feed: ${RSS_FEED_URL}...`);
+    const res = await fetch(RSS_FEED_URL, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
       }
@@ -277,7 +281,10 @@ async function publishNextPost() {
 Напиши короткий неформальный пост на русском языке на основе этой новости для моего блога в Threads. Поделись этой новостью и добавь короткую мысль или реакцию от себя (например, почему это важно).
 `;
           } else {
-            console.log('No news articles fetched. Generating a general IT/SMM trend observation...');
+            console.log('No news articles fetched. Generating a general trend observation...');
+            
+            // === НАСТРОЙКА РЕЗЕРВНОЙ ТЕМАТИКИ ИИ ===
+            // Напишите ниже, на какую тему ИИ должен генерировать посты, если новостная лента пуста или недоступна
             prompt = `
 Сгенерируй короткую интересную мысль, наблюдение или тренд из сферы IT, SMM или искусственного интеллекта.
 `;
