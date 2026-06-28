@@ -10,7 +10,21 @@ const fs = require('fs');
 const path = require('path');
 
 
+// === НАСТРОЙКА ДЛЯ ПОЛЬЗОВАТЕЛЯ (CUSTOMIZATION) ===
+// 1. Список RSS-лент с новостями. Скрипт выберет случайную рабочую ленту и опубликует новость оттуда.
+// Вы можете указать несколько ссылок через запятую, например: ['https://techcrunch.com/feed/', 'https://vc.ru/rss']
+// Если вы хотите ОТКЛЮЧИТЬ новости и писать посты только через ИИ по промпту ниже — оставьте массив пустым: const RSS_FEEDS = [];
+const RSS_FEEDS = [
+  'https://techcrunch.com/feed/'
+];
+
+// 2. Тема для ИИ, если нет готовых новостей или черновиков в thoughts.txt
+const FALLBACK_AI_PROMPT = `
+Сгенерируй короткую интересную мысль, наблюдение или тренд из сферы IT, SMM или искусственного интеллекта.
+`;
+
 // Helper to load environment variables from local .env file
+
 function loadEnv() {
   const envPath = path.join(__dirname, '.env');
   if (fs.existsSync(envPath)) {
@@ -149,70 +163,81 @@ async function callGemini(apiKey, systemInstruction, promptText, model = 'gemini
 }
 
 async function fetchLatestTechNews() {
-  try {
-    // === НАСТРОЙКА ИСТОЧНИКА НОВОСТЕЙ ===
-    // Вы можете заменить ссылку ниже на любую другую RSS-ленту (например, https://habr.com/ru/rss/all/all/ или ленту новостей вашей тематики)
-    const RSS_FEED_URL = 'https://techcrunch.com/feed/';
-    
-    console.log(`Fetching latest news from RSS feed: ${RSS_FEED_URL}...`);
-    const res = await fetch(RSS_FEED_URL, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-      }
-    });
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-    const xml = await res.text();
-    
-    const items = [];
-    const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
-    for (const match of itemMatches) {
-      const itemContent = match[1];
-      
-      // Parse Title
-      let title = '';
-      const titleCdataMatch = itemContent.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i);
-      if (titleCdataMatch) {
-        title = titleCdataMatch[1];
-      } else {
-        const titleNormalMatch = itemContent.match(/<title>([\s\S]*?)<\/title>/i);
-        if (titleNormalMatch) title = titleNormalMatch[1];
-      }
-      
-      // Parse Description
-      let description = '';
-      const descCdataMatch = itemContent.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i);
-      if (descCdataMatch) {
-        description = descCdataMatch[1];
-      } else {
-        const descNormalMatch = itemContent.match(/<description>([\s\S]*?)<\/description>/i);
-        if (descNormalMatch) description = descNormalMatch[1];
-      }
-      
-      description = description.replace(/<\/?[^>]+(>|$)/g, "").substring(0, 150);
-      
-      // Check for forbidden keywords (defense, military, weapon, war, politics, religion, etc.)
-      const forbiddenKeywords = [
-        'military', 'defense', 'weapon', 'war', 'politics', 'religion', 'pentagon', 'army', 'navy', 'air force',
-        'combat', 'battle', 'startup for defense', 'darpa', 'defense tech', 'defense-tech', 'national security'
-      ];
-      
-      const textToScan = `${title} ${description}`.toLowerCase();
-      const hasForbiddenKeyword = forbiddenKeywords.some(keyword => textToScan.includes(keyword));
-      
-      if (title && !hasForbiddenKeyword) {
-        items.push({ title: title.trim(), description: description.trim() });
-      } else if (hasForbiddenKeyword) {
-        console.log(`Skipping defense/military/political article: "${title}"`);
-      }
-    }
-    
-    return items;
-  } catch (err) {
-    console.warn('Failed to fetch TechCrunch RSS, falling back to offline generation:', err.message);
+  if (!Array.isArray(RSS_FEEDS) || RSS_FEEDS.length === 0) {
+    console.log('RSS_FEEDS list is empty. Skipping RSS news fetch and using pure AI generation...');
     return [];
   }
+
+  // Shuffle or clone the list to try them
+  const feedsToTry = [...RSS_FEEDS].sort(() => Math.random() - 0.5);
+
+  for (const feedUrl of feedsToTry) {
+    try {
+      console.log(`Fetching latest news from RSS feed: ${feedUrl}...`);
+      const res = await fetch(feedUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        }
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const xml = await res.text();
+      
+      const items = [];
+      const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
+      for (const match of itemMatches) {
+        const itemContent = match[1];
+        
+        // Parse Title
+        let title = '';
+        const titleCdataMatch = itemContent.match(/<title><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i);
+        if (titleCdataMatch) {
+          title = titleCdataMatch[1];
+        } else {
+          const titleNormalMatch = itemContent.match(/<title>([\s\S]*?)<\/title>/i);
+          if (titleNormalMatch) title = titleNormalMatch[1];
+        }
+        
+        // Parse Description
+        let description = '';
+        const descCdataMatch = itemContent.match(/<description><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i);
+        if (descCdataMatch) {
+          description = descCdataMatch[1];
+        } else {
+          const descNormalMatch = itemContent.match(/<description>([\s\S]*?)<\/description>/i);
+          if (descNormalMatch) description = descNormalMatch[1];
+        }
+        
+        description = (description || '').replace(/<\/?[^>]+(>|$)/g, "").substring(0, 150);
+        
+        // Check for forbidden keywords (defense, military, weapon, war, politics, religion, etc.)
+        const forbiddenKeywords = [
+          'military', 'defense', 'weapon', 'war', 'politics', 'religion', 'pentagon', 'army', 'navy', 'air force',
+          'combat', 'battle', 'startup for defense', 'darpa', 'defense tech', 'defense-tech', 'national security'
+        ];
+        
+        const textToScan = `${title} ${description}`.toLowerCase();
+        const hasForbiddenKeyword = forbiddenKeywords.some(keyword => textToScan.includes(keyword));
+        
+        if (title && !hasForbiddenKeyword) {
+          items.push({ title: title.trim(), description: description.trim() });
+        } else if (hasForbiddenKeyword) {
+          console.log(`Skipping defense/military/political article: "${title}"`);
+        }
+      }
+      
+      if (items.length > 0) {
+        return items;
+      }
+      console.warn(`No valid items found in feed: ${feedUrl}`);
+    } catch (err) {
+      console.warn(`Failed to fetch from RSS feed ${feedUrl}:`, err.message);
+    }
+  }
+
+  console.log('All configured RSS feeds failed or returned no articles.');
+  return [];
 }
 
 async function publishNextPost() {
@@ -265,7 +290,7 @@ async function publishNextPost() {
             finalPostText = await callGemini(geminiApiKey, HUMANIZER_SYSTEM_INSTRUCTION, "Пожалуйста, перепиши и хуманизируй следующий текст:\n\n" + rawDraft, 'gemini-2.5-flash');
           }
         } else {
-          console.log('\nthoughts.txt is empty or missing. Fetching fresh news from TechCrunch...');
+          console.log('\nthoughts.txt is empty or missing. Fetching fresh news from RSS feeds...');
           const newsItems = await fetchLatestTechNews();
           
           let prompt = '';
@@ -282,12 +307,7 @@ async function publishNextPost() {
 `;
           } else {
             console.log('No news articles fetched. Generating a general trend observation...');
-            
-            // === НАСТРОЙКА РЕЗЕРВНОЙ ТЕМАТИКИ ИИ ===
-            // Напишите ниже, на какую тему ИИ должен генерировать посты, если новостная лента пуста или недоступна
-            prompt = `
-Сгенерируй короткую интересную мысль, наблюдение или тренд из сферы IT, SMM или искусственного интеллекта.
-`;
+            prompt = FALLBACK_AI_PROMPT;
           }
           
           try {
